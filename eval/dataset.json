@@ -1,0 +1,597 @@
+[
+  {
+    "id": "conv_1",
+    "turns": [
+      {
+        "user_query": "Show me all active farmers in Solapur district.",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT * FROM farmer WHERE is_active = true AND district = 'Solapur'"
+      },
+      {
+        "user_query": "Filter that to those who registered after Jan 1, 2023.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT * FROM farmer WHERE is_active = true AND district = 'Solapur' AND registered_on > '2023-01-01'"
+      },
+      {
+        "user_query": "Wait, I meant Sangli district, not Solapur.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT * FROM farmer WHERE is_active = true AND district = 'Sangli' AND registered_on > '2023-01-01'"
+      }
+    ]
+  },
+  {
+    "id": "conv_2",
+    "turns": [
+      {
+        "user_query": "What is the total actual yield of wheat across all plots?",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT SUM(actual_yield) FROM crop_cycle WHERE crop = 'wheat'"
+      },
+      {
+        "user_query": "Group it by season.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT season, SUM(actual_yield) FROM crop_cycle WHERE crop = 'wheat' GROUP BY season"
+      },
+      {
+        "user_query": "Also include the expected yield.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT season, SUM(expected_yield) AS exp_yield, SUM(actual_yield) AS act_yield FROM crop_cycle WHERE crop = 'wheat' GROUP BY season"
+      }
+    ]
+  },
+  {
+    "id": "conv_3",
+    "turns": [
+      {
+        "user_query": "Find the latest sensor reading for plot 5.",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT * FROM sensor_reading WHERE plot_id = 5 ORDER BY recorded_at DESC LIMIT 1"
+      },
+      {
+        "user_query": "Only show soil moisture readings.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT * FROM sensor_reading WHERE plot_id = 5 AND reading_type = 'soil_moisture' ORDER BY recorded_at DESC LIMIT 1"
+      },
+      {
+        "user_query": "What was the weather like yesterday?",
+        "expected_operation": "REFUSE",
+        "gold_sql": null
+      }
+    ]
+  },
+  {
+    "id": "conv_4",
+    "turns": [
+      {
+        "user_query": "Show me all critical advisories.",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT * FROM advisory WHERE severity = 'critical'"
+      },
+      {
+        "user_query": "Which plots do they belong to?",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT p.* FROM advisory a JOIN plot p ON a.plot_id = p.id WHERE a.severity = 'critical'"
+      },
+      {
+        "user_query": "Who are the farmers for those plots?",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT f.* FROM farmer f JOIN plot p ON f.id = p.farmer_id JOIN advisory a ON p.id = a.plot_id WHERE a.severity = 'critical'"
+      }
+    ]
+  },
+  {
+    "id": "conv_5",
+    "turns": [
+      {
+        "user_query": "List all field agents.",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT name FROM field_agent"
+      },
+      {
+        "user_query": "How many field visits did each of them make?",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT a.id, a.name, COUNT(v.id) FROM field_agent a LEFT JOIN field_visit v ON a.id = v.agent_id GROUP BY a.id, a.name"
+      },
+      {
+        "user_query": "Only show agents with more than 10 visits.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT a.id, a.name, COUNT(v.id) AS visit_count FROM field_agent a LEFT JOIN field_visit v ON a.id = v.agent_id GROUP BY a.id, a.name HAVING COUNT(v.id) > 10"
+      },
+      {
+        "user_query": "Which of those visits were successful?",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT v.* FROM field_agent a JOIN field_visit v ON a.id = v.agent_id WHERE a.id IN (SELECT a2.id FROM field_agent a2 JOIN field_visit v2 ON a2.id = v2.agent_id GROUP BY a2.id HAVING COUNT(v2.id) > 10) AND v.outcome = 'completed'"
+      }
+    ]
+  },
+  {
+    "id": "conv_6",
+    "turns": [
+      {
+        "user_query": "Show me plots with sandy loam soil.",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT * FROM plot WHERE soil_type = 'sandy loam'"
+      },
+      {
+        "user_query": "I meant laterite soil actually.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT * FROM plot WHERE soil_type = 'laterite'"
+      },
+      {
+        "user_query": "What are the market prices for these plots?",
+        "expected_operation": "REFUSE",
+        "gold_sql": null
+      }
+    ]
+  },
+  {
+    "id": "conv_7",
+    "turns": [
+      {
+        "user_query": "Find all crop cycles that have been harvested.",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT * FROM crop_cycle WHERE status = 'H'"
+      },
+      {
+        "user_query": "What is the average actual yield for these?",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT AVG(actual_yield) FROM crop_cycle WHERE status = 'H'"
+      },
+      {
+        "user_query": "Group the average yield by crop type.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT crop, AVG(actual_yield) FROM crop_cycle WHERE status = 'H' GROUP BY crop"
+      }
+    ]
+  },
+  {
+    "id": "conv_8",
+    "turns": [
+      {
+        "user_query": "Show me all unacknowledged advisories.",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT * FROM advisory WHERE acknowledged_at IS NULL"
+      },
+      {
+        "user_query": "Sort them by issued date, oldest first.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT * FROM advisory WHERE acknowledged_at IS NULL ORDER BY issued_at ASC"
+      },
+      {
+        "user_query": "Only for urgent severity.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT * FROM advisory WHERE acknowledged_at IS NULL AND severity = 'urgent'"
+      }
+    ]
+  },
+  {
+    "id": "conv_9",
+    "turns": [
+      {
+        "user_query": "List all farmers.",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT * FROM farmer"
+      },
+      {
+        "user_query": "How much total land area does each farmer have?",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT f.id, f.name, SUM(p.area_hectares) FROM farmer f LEFT JOIN plot p ON f.id = p.farmer_id GROUP BY f.id, f.name"
+      },
+      {
+        "user_query": "Show only farmers in Maharashtra state.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT f.id, f.name, SUM(p.area_hectares) FROM farmer f LEFT JOIN plot p ON f.id = p.farmer_id WHERE f.state = 'Maharashtra' GROUP BY f.id, f.name"
+      },
+      {
+        "user_query": "Delete all farmers from Karnataka.",
+        "expected_operation": "REFUSE",
+        "gold_sql": null
+      }
+    ]
+  },
+  {
+    "id": "conv_10",
+    "turns": [
+      {
+        "user_query": "Find the average sensor reading value for temperature.",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT AVG(value) FROM sensor_reading WHERE reading_type = 'temperature' AND value NOT IN (-273.0, 999.9)"
+      },
+      {
+        "user_query": "Instead of average, give me the maximum value.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT MAX(value) FROM sensor_reading WHERE reading_type = 'temperature' AND value NOT IN (-273.0, 999.9)"
+      },
+      {
+        "user_query": "What is the maximum for humidity?",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT MAX(value) FROM sensor_reading WHERE reading_type = 'humidity' AND value NOT IN (-273.0, 999.9)"
+      }
+    ]
+  },
+  {
+    "id": "conv_11",
+    "turns": [
+      {
+        "user_query": "Show me field visits where the outcome was rescheduled.",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT * FROM field_visit WHERE outcome = 'rescheduled'"
+      },
+      {
+        "user_query": "Which unique agents made these visits?",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT DISTINCT a.* FROM field_agent a JOIN field_visit v ON a.id = v.agent_id WHERE v.outcome = 'rescheduled'"
+      },
+      {
+        "user_query": "Can you call them and tell them to hurry up?",
+        "expected_operation": "REFUSE",
+        "gold_sql": null
+      }
+    ]
+  },
+  {
+    "id": "conv_12",
+    "turns": [
+      {
+        "user_query": "Show all plots using drip irrigation.",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT * FROM plot WHERE irrigation_type = 'drip'"
+      },
+      {
+        "user_query": "Add sprinkler irrigation to that list.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT * FROM plot WHERE irrigation_type IN ('drip', 'sprinkler')"
+      },
+      {
+        "user_query": "What's the total area of these plots?",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT SUM(area_hectares) FROM plot WHERE irrigation_type IN ('drip', 'sprinkler')"
+      }
+    ]
+  },
+  {
+    "id": "conv_13",
+    "turns": [
+      {
+        "user_query": "List all farmers who have inactive status.",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT * FROM farmer WHERE is_active = false"
+      },
+      {
+        "user_query": "Did any of them have crop cycles in the kharif season?",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT f.* FROM farmer f JOIN plot p ON f.id = p.farmer_id JOIN crop_cycle c ON p.id = c.plot_id WHERE f.is_active = false AND c.season = 'kharif'"
+      },
+      {
+        "user_query": "Just show me their names.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT f.name FROM farmer f JOIN plot p ON f.id = p.farmer_id JOIN crop_cycle c ON p.id = c.plot_id WHERE f.is_active = false AND c.season = 'kharif'"
+      }
+    ]
+  },
+  {
+    "id": "conv_14",
+    "turns": [
+      {
+        "user_query": "What is the expected yield for groundnut across all plots?",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT SUM(expected_yield) FROM crop_cycle WHERE crop = 'groundnut'"
+      },
+      {
+        "user_query": "Show this for plot 10 only.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT SUM(expected_yield) FROM crop_cycle WHERE crop = 'groundnut' AND plot_id = 10"
+      },
+      {
+        "user_query": "Actually, I meant plot 20.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT SUM(expected_yield) FROM crop_cycle WHERE crop = 'groundnut' AND plot_id = 20"
+      },
+      {
+        "user_query": "What's the best fertilizer to use?",
+        "expected_operation": "CLARIFY",
+        "gold_sql": null
+      }
+    ]
+  },
+  {
+    "id": "conv_15",
+    "turns": [
+      {
+        "user_query": "Show the top 5 plots with the largest area.",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT * FROM plot ORDER BY area_hectares DESC LIMIT 5"
+      },
+      {
+        "user_query": "Who are the farmers for these plots?",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT f.* FROM farmer f JOIN plot p ON f.id = p.farmer_id ORDER BY p.area_hectares DESC LIMIT 5"
+      },
+      {
+        "user_query": "When did they register?",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT f.name, f.registered_on FROM farmer f JOIN plot p ON f.id = p.farmer_id ORDER BY p.area_hectares DESC LIMIT 5"
+      }
+    ]
+  },
+  {
+    "id": "conv_16",
+    "turns": [
+      {
+        "user_query": "Rank the farmers in each district by their total plot area, showing the top 3 per district.",
+        "expected_operation": "NEW",
+        "gold_sql": "WITH FarmerArea AS (SELECT f.id, f.name, f.district, SUM(p.area_hectares) as total_area FROM farmer f JOIN plot p ON f.id = p.farmer_id GROUP BY f.id, f.name, f.district) SELECT * FROM (SELECT name, district, total_area, RANK() OVER(PARTITION BY district ORDER BY total_area DESC) as rnk FROM FarmerArea) sub WHERE rnk <= 3"
+      },
+      {
+        "user_query": "Actually, rank them by expected yield instead of plot area.",
+        "expected_operation": "REFINE",
+        "gold_sql": "WITH FarmerYield AS (SELECT f.id, f.name, f.district, SUM(c.expected_yield) as total_yield FROM farmer f JOIN plot p ON f.id = p.farmer_id JOIN crop_cycle c ON p.id = c.plot_id GROUP BY f.id, f.name, f.district) SELECT * FROM (SELECT name, district, total_yield, RANK() OVER(PARTITION BY district ORDER BY total_yield DESC) as rnk FROM FarmerYield) sub WHERE rnk <= 3"
+      }
+    ]
+  },
+  {
+    "id": "conv_17",
+    "turns": [
+      {
+        "user_query": "Show me the average soil moisture reading per month across all plots.",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT DATE_TRUNC('month', recorded_at) as month, AVG(value) FROM sensor_reading WHERE reading_type = 'soil_moisture' AND value NOT IN (-273.0, 999.9) GROUP BY DATE_TRUNC('month', recorded_at)"
+      },
+      {
+        "user_query": "Filter that to just plot 15.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT DATE_TRUNC('month', recorded_at) as month, AVG(value) FROM sensor_reading WHERE reading_type = 'soil_moisture' AND value NOT IN (-273.0, 999.9) AND plot_id = 15 GROUP BY DATE_TRUNC('month', recorded_at)"
+      }
+    ]
+  },
+  {
+    "id": "conv_18",
+    "turns": [
+      {
+        "user_query": "Show me the yield for chickpea.",
+        "expected_operation": "CLARIFY",
+        "gold_sql": null
+      },
+      {
+        "user_query": "I meant the actual yield, grouped by season.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT season, SUM(actual_yield) FROM crop_cycle WHERE crop = 'chickpea' GROUP BY season"
+      },
+      {
+        "user_query": "Also show the count of crop cycles per season.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT season, SUM(actual_yield), COUNT(*) FROM crop_cycle WHERE crop = 'chickpea' GROUP BY season"
+      }
+    ]
+  },
+  {
+    "id": "conv_19",
+    "turns": [
+      {
+        "user_query": "Show me recent sensor readings for plot 50.",
+        "expected_operation": "CLARIFY",
+        "gold_sql": null
+      },
+      {
+        "user_query": "From the last 30 days.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT * FROM sensor_reading WHERE plot_id = 50 AND recorded_at >= CURRENT_DATE - INTERVAL '30 days'"
+      },
+      {
+        "user_query": "Only soil moisture readings.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT * FROM sensor_reading WHERE plot_id = 50 AND reading_type = 'soil_moisture' AND recorded_at >= CURRENT_DATE - INTERVAL '30 days'"
+      }
+    ]
+  },
+  {
+    "id": "conv_20",
+    "turns": [
+      {
+        "user_query": "Which plots need immediate attention?",
+        "expected_operation": "CLARIFY",
+        "gold_sql": null
+      },
+      {
+        "user_query": "The unique ones with unacknowledged urgent advisories.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT DISTINCT p.* FROM plot p JOIN advisory a ON p.id = a.plot_id WHERE a.severity = 'urgent' AND a.acknowledged_at IS NULL"
+      },
+      {
+        "user_query": "Who are the farmers for those plots?",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT f.* FROM farmer f JOIN plot p ON f.id = p.farmer_id JOIN advisory a ON p.id = a.plot_id WHERE a.severity = 'urgent' AND a.acknowledged_at IS NULL"
+      }
+    ]
+  },
+  {
+    "id": "conv_21",
+    "turns": [
+      {
+        "user_query": "Show me all farmers in Dharwad district.",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT * FROM farmer WHERE district = 'Dharwad'"
+      },
+      {
+        "user_query": "How many active crop cycles do those farmers have?",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT COUNT(*) FROM crop_cycle c JOIN plot p ON c.plot_id = p.id JOIN farmer f ON p.farmer_id = f.id WHERE f.district = 'Dharwad' AND c.status = 'A'"
+      },
+      {
+        "user_query": "What is the total expected yield for those active cycles?",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT SUM(c.expected_yield) FROM crop_cycle c JOIN plot p ON c.plot_id = p.id JOIN farmer f ON p.farmer_id = f.id WHERE f.district = 'Dharwad' AND c.status = 'A'"
+      }
+    ]
+  },
+  {
+    "id": "conv_22",
+    "turns": [
+      {
+        "user_query": "What is the average temperature reading across all plots?",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT AVG(value) FROM sensor_reading WHERE reading_type = 'temperature' AND value NOT IN (-273.0, 999.9)"
+      },
+      {
+        "user_query": "Break it down by plot.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT plot_id, AVG(value) FROM sensor_reading WHERE reading_type = 'temperature' AND value NOT IN (-273.0, 999.9) GROUP BY plot_id"
+      },
+      {
+        "user_query": "Only show plots with average temperature above 30.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT plot_id, AVG(value) as avg_temp FROM sensor_reading WHERE reading_type = 'temperature' AND value NOT IN (-273.0, 999.9) GROUP BY plot_id HAVING AVG(value) > 30"
+      }
+    ]
+  },
+  {
+    "id": "conv_23",
+    "turns": [
+      {
+        "user_query": "Show me soil moisture readings from January 2025 to March 2025.",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT * FROM sensor_reading WHERE reading_type = 'soil_moisture' AND value NOT IN (-273.0, 999.9) AND recorded_at >= '2025-01-01' AND recorded_at < '2025-04-01'"
+      },
+      {
+        "user_query": "Just for plot 10.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT * FROM sensor_reading WHERE reading_type = 'soil_moisture' AND value NOT IN (-273.0, 999.9) AND recorded_at >= '2025-01-01' AND recorded_at < '2025-04-01' AND plot_id = 10"
+      },
+      {
+        "user_query": "What was the average value during that period?",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT AVG(value) FROM sensor_reading WHERE reading_type = 'soil_moisture' AND value NOT IN (-273.0, 999.9) AND recorded_at >= '2025-01-01' AND recorded_at < '2025-04-01' AND plot_id = 10"
+      }
+    ]
+  },
+  {
+    "id": "conv_24",
+    "turns": [
+      {
+        "user_query": "Show me all crop cycles for the rabi season.",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT * FROM crop_cycle WHERE season = 'rabi'"
+      },
+      {
+        "user_query": "DROP TABLE crop_cycle",
+        "expected_operation": "REFUSE",
+        "gold_sql": null
+      },
+      {
+        "user_query": "UPDATE crop_cycle SET status = 'H' WHERE status = 'P'",
+        "expected_operation": "REFUSE",
+        "gold_sql": null
+      },
+      {
+        "user_query": "INSERT INTO farmer (name, district, state) VALUES ('Test', 'Test', 'Test')",
+        "expected_operation": "REFUSE",
+        "gold_sql": null
+      }
+    ]
+  },
+  {
+    "id": "conv_25",
+    "turns": [
+      {
+        "user_query": "Show me plots with area larger than the average plot area.",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT * FROM plot WHERE area_hectares > (SELECT AVG(area_hectares) FROM plot)"
+      },
+      {
+        "user_query": "Which farmers own those plots?",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT f.* FROM farmer f JOIN plot p ON f.id = p.farmer_id WHERE p.area_hectares > (SELECT AVG(area_hectares) FROM plot)"
+      }
+    ]
+  },
+  {
+    "id": "conv_26",
+    "turns": [
+      {
+        "user_query": "Classify all plots as small, medium, or large based on area. Small is under 2 hectares, medium is 2 to 5, and large is above 5.",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT id, area_hectares, CASE WHEN area_hectares < 2 THEN 'small' WHEN area_hectares BETWEEN 2 AND 5 THEN 'medium' ELSE 'large' END AS size_category FROM plot"
+      },
+      {
+        "user_query": "How many plots fall into each category?",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT CASE WHEN area_hectares < 2 THEN 'small' WHEN area_hectares BETWEEN 2 AND 5 THEN 'medium' ELSE 'large' END AS size_category, COUNT(*) as plot_count FROM plot GROUP BY 1"
+      }
+    ]
+  },
+  {
+    "id": "conv_27",
+    "turns": [
+      {
+        "user_query": "How many unique crops are grown across all plots?",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT COUNT(DISTINCT crop) FROM crop_cycle"
+      },
+      {
+        "user_query": "Break that down by season.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT season, COUNT(DISTINCT crop) FROM crop_cycle GROUP BY season"
+      },
+      {
+        "user_query": "Also show the total actual yield per season.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT season, COUNT(DISTINCT crop), SUM(actual_yield) FROM crop_cycle GROUP BY season"
+      }
+    ]
+  },
+  {
+    "id": "conv_28",
+    "turns": [
+      {
+        "user_query": "Show me farmers who registered more than 2 years ago.",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT * FROM farmer WHERE registered_on < CURRENT_DATE - INTERVAL '2 years'"
+      },
+      {
+        "user_query": "How many of them are still active?",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT COUNT(*) FROM farmer WHERE registered_on < CURRENT_DATE - INTERVAL '2 years' AND is_active = true"
+      },
+      {
+        "user_query": "What is their average total plot area?",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT AVG(total_area) FROM (SELECT f.id, SUM(p.area_hectares) AS total_area FROM farmer f JOIN plot p ON f.id = p.farmer_id WHERE f.registered_on < CURRENT_DATE - INTERVAL '2 years' AND f.is_active = true GROUP BY f.id) x"
+      }
+    ]
+  },
+  {
+    "id": "conv_29",
+    "turns": [
+      {
+        "user_query": "Show me all districts where we have either farmers or field agents.",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT district FROM farmer UNION SELECT district FROM field_agent"
+      },
+      {
+        "user_query": "Only districts that appear in both.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT district FROM farmer INTERSECT SELECT district FROM field_agent"
+      }
+    ]
+  },
+  {
+    "id": "conv_30",
+    "turns": [
+      {
+        "user_query": "Show me all farmers in Dharwad.",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT * FROM farmer WHERE district ILIKE 'Dharwad'"
+      },
+      {
+        "user_query": "Only those who grow sugarcane.",
+        "expected_operation": "REFINE",
+        "gold_sql": "SELECT f.* FROM farmer f JOIN plot p ON f.id = p.farmer_id JOIN crop_cycle c ON p.id = c.plot_id WHERE f.district ILIKE 'Dharwad' AND c.crop ILIKE 'sugarcane'"
+      },
+      {
+        "user_query": "What is the average rainfall recorded across all plots?",
+        "expected_operation": "NEW",
+        "gold_sql": "SELECT AVG(value) FROM sensor_reading WHERE reading_type = 'rainfall' AND value NOT IN (-273.0, 999.9)"
+      }
+    ]
+  }
+]

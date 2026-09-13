@@ -1,0 +1,27 @@
+Table: farmer (id, name, district, state, registered_on, is_active)
+Table: plot (id, farmer_id, area_hectares, soil_type, district, irrigation_type)
+Table: crop_cycle (id, plot_id, crop, season, sown_date, harvest_date, expected_yield, actual_yield, status)
+Table: sensor_reading (id, plot_id, reading_type, value, recorded_at)
+Table: advisory (id, plot_id, issued_at, category, severity, acknowledged_at)
+Table: field_agent (id, name, district, joined_on)
+Table: field_visit (id, plot_id, agent_id, visited_at, outcome, notes)
+
+--- Schema Context & Data Traps ---
+
+1. UNITS & DEFINITIONS:
+- plot.area_hectares: Unit is hectares (ha).
+- crop_cycle.expected_yield & actual_yield: Unit is TOTAL kg per plot (not per hectare). If the user asks for average yield, use SUM(actual_yield)/SUM(area_hectares) if they mean per-hectare, or AVG(actual_yield) if they mean per plot.
+
+2. ENUMS & EXACT MATCHES:
+- crop_cycle.status MUST be matched exactly with: 'H' (Harvested), 'F' (Failed), 'P' (Planted), 'A' (Active).
+- sensor_reading.reading_type: 'soil_moisture', 'humidity', 'rainfall', 'temperature'.
+- advisory.category: 'disease', 'harvest', 'weather', 'pest', 'nutrient', 'irrigation'.
+- advisory.severity: 'info', 'warning', 'urgent', 'critical'.
+- field_visit.outcome: 'completed', 'partial', 'rescheduled', 'farmer_absent', 'cancelled'.
+
+3. GEOGRAPHIC LOCATIONS:
+- ALWAYS use case-insensitive matching (`ILIKE`) for geographic searches, but DO NOT use wildcards (`%`) unless explicitly needed for partial searches. (e.g. use `state ILIKE 'Pune'` instead of `state = 'Pune'` or `state ILIKE '%Pune%'`) to avoid false positives like matching 'Dune' when searching for 'une'.
+- Be aware that users may confuse districts and states (e.g. asking for "State of Pune"). If a user asks for a region, search both: `WHERE (district ILIKE 'Region' OR state ILIKE 'Region')`.
+
+4. INVALID DATA FILTERING:
+- sensor_reading.value contains error codes. ALWAYS append `WHERE value NOT IN (-273.0, 999.9)` when aggregating sensor readings, otherwise averages/mins/maxes will be subtly wrong.

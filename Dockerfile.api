@@ -1,0 +1,7 @@
+FROM python:3.11-slim
+WORKDIR /app
+COPY pyproject.toml README.md ./
+RUN mkdir -p talk2db && touch talk2db/__init__.py
+RUN pip install --no-cache-dir ".[api]"
+COPY . .
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,89 @@
+name: talk2db
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: targetdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./db/data:/docker-entrypoint-initdb.d/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  ollama:
+    image: ollama/ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: [ "CMD-SHELL", "ollama list || exit 1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ollama-init:
+    image: ollama/ollama
+    entrypoint: ["ollama", "pull", "qwen2.5-coder:7b-instruct-q4_K_M"]
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    restart: "no"
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "8000:8000"
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      LLM_MODEL_NAME: qwen2.5-coder:7b-instruct-q4_K_M
+      LLM_TEMPERATURE: "0.0"
+      DB_DSN_APP: postgresql://postgres:password@postgres:5432/targetdb
+      DB_DSN_TARGET: postgresql://readonly_user:readonly_pass@postgres:5432/targetdb
+      REDIS_URL: redis://redis:6379/0
+      LANGCHAIN_TRACING_V2: "false"
+      LANGCHAIN_PROJECT: Talk2DB
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    ports:
+      - "8501:8501"
+    environment:
+      API_URL: http://api:8000
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  ollama_data:

@@ -1,0 +1,17 @@
+Few-Shot Examples for Complex Queries:
+1. Time Bucketing:
+Q: "Maximum temperature per day"
+SQL: SELECT DATE_TRUNC('day', recorded_at) AS day, MAX(value) FROM sensor_reading WHERE reading_type = 'temperature' AND value NOT IN (-273.0, 999.9) GROUP BY DATE_TRUNC('day', recorded_at) ORDER BY day ASC LIMIT 100
+
+2. Window Functions (Ranking):
+Q: "Rank top 3 farmers in each district by total yield"
+SQL: WITH FarmerYield AS (SELECT f.id, f.name, f.district, SUM(c.expected_yield) as total FROM farmer f JOIN plot p ON f.id = p.farmer_id JOIN crop_cycle c ON p.id = c.plot_id GROUP BY f.id, f.name, f.district) SELECT * FROM (SELECT name, district, total, RANK() OVER(PARTITION BY district ORDER BY total DESC) as rnk FROM FarmerYield) sub WHERE rnk <= 3 LIMIT 100
+
+3. Aggregation & Joins:
+Q: "Total land area of active farmers in Solapur"
+SQL: SELECT f.name, SUM(p.area_hectares) FROM farmer f JOIN plot p ON f.id = p.farmer_id WHERE f.is_active = TRUE AND f.district = 'Solapur' GROUP BY f.name ORDER BY SUM(p.area_hectares) DESC LIMIT 100
+
+4. Multi-Turn Context (Resolving pronouns/filters from history):
+History: User asked "Show me farmers in Solapur", Agent returned farmers in Solapur.
+Q: "Which of them grow Wheat?"
+SQL: SELECT f.* FROM farmer f JOIN plot p ON f.id = p.farmer_id JOIN crop_cycle c ON p.id = c.plot_id WHERE f.district ILIKE 'Solapur' AND c.crop ILIKE 'Wheat' ORDER BY f.id LIMIT 100
