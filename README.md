@@ -94,86 +94,38 @@ Our system leverages a **State Machine (LangGraph)** to handle conversational ro
 
 ---
 
-## Design Decisions & Trade-offs
 
-### Highlights: Going Beyond the Requirements
-While adhering strictly to local-execution constraints (7B local model, conversational state, deterministic evaluation), we engineered several advanced features that elevate this from a prototype to a production-grade architecture:
+
+### Architecture Highlights
+We engineered several advanced features that elevate this to a production-grade architecture:
 - **Asynchronous FastAPI Backend**: Instead of blocking Streamlit, we decoupled the architecture into a high-performance async FastAPI backend (`api.py`) that manages non-blocking DB execution (`asyncpg`) and parallel state mutations.
 - **Dual-Pool Database Isolation**: The LangGraph state checkpoints, execution telemetry (`chat_history`), and crash traces (`system_errors`) are logged securely via an Admin pool, while the LLM's dynamically generated queries are tightly sandboxed within a restricted `readonly_user` pool (explicitly whitelisted to only 7 agricultural tables).
 - **Session Resumption Time-Travel**: By leveraging LangGraph's native PostgreSQL checkpointer, users can switch between historical conversational sessions instantly in the UI. The semantic state (JSON filters) is perfectly hydrated from the database, allowing them to seamlessly resume a conversation from days ago.
 - **Graceful UI Crash Handling**: Both backend and frontend exceptions are gracefully trapped. Instead of showing raw stack traces to the user, the UI displays polite fallback messages while asynchronously logging the exact stack trace to the persistent `system_errors` table for developer triage.
 
-### 1. Compensating for a Small (7B) Model
-A 7B model prompted naively struggles with complex text-to-SQL logic (like Window Functions or multi-table JOINs) and multi-turn context drift. 
-- **Semantic Router**: We decoupled the raw conversation history from the SQL Generator. We use the model strictly as an *Information Extraction Router* on the first pass to build a rigidly structured JSON dictionary of active filters. The SQL Generator then only looks at this clean, extracted dictionary to write the SQL. This drastically reduces cognitive load and hallucination.
-- **Structured Output Chain-of-Thought (CoT)**: By requiring the Pydantic schemas (for both Routing and SQL Generation) to define a `reasoning` string field *before* the actual output, we force the autoregressive LLM to "think out loud" before writing SQL. This mathematically increases generation accuracy.
-- **Hardcoded Few-Shot Anchoring**: We injected 4 highly specific SQL examples (Time Bucketing, Window Ranking, Aggregation, and Pronoun Resolution) directly into the `sql_gen.txt` prompt. This gives the 7B model structural templates for edge cases without requiring an expensive Vector DB.
-- **KV Caching Optimization**: We explicitly structured our external prompt files (`prompts/router.txt` and `prompts/sql_gen.txt`) to maximize local inference speed. Massive, static text blocks like the Database Schema and System Instructions are strictly placed at the **top** of the prompts. Highly dynamic variables like `{history}` and `{user_query}` are placed at the absolute **bottom**. This guarantees that the LLM computes the Key-Value (KV) cache for the massive schema exactly once, instantly reusing it for all subsequent conversational turns.
-- **ILIKE vs =**: To prevent hallucination failures from strict casing, we enforced a prompt rule forcing `ILIKE` for categorical columns, and wildcard `ILIKE '%...%'` for free-text columns.
-
-### 2. Framework Usage: LangGraph
-We utilized **LangGraph** to orchestrate this directed cyclic graph (with bounded recursion for retries).
-- **What it does for us**: It natively handles the recursive `while` loop for our self-correction retries and automatically checkpoints our `AgentState` to PostgreSQL. This allowed us to build the "Session Resumption" dropdown in Streamlit, letting users reload past sessions and inherently restoring the agent's semantic memory without writing manual state hydration boilerplate. 
-- **What we would lose without it**: Without LangGraph, we would have had to manually engineer the database persistence layer, manually implement recursive retry logic inside standard Python `while` loops, and write custom reducers for JSON state merging.
-
-### 3. Conversation State Representation (Carry Forward vs. Discard)
-- **What we carry forward**: The semantic state (Topic, Active JSON Filters, Group By clauses). This persists infinitely across the session.
-- **What we discard**: The raw text conversation history. We strictly truncate the chat history to the last **4 turns (8 messages)**.
-- **How we decide**: This bounded context strategy guarantees that context from 6 turns ago doesn't arbitrarily bleed into a new question and poison the SQL generation. However, because the semantic JSON dictionary is carried forward indefinitely, the user never has to repeat themselves about active filters (like "kharif season").
-
-### 4. Guardrail Strategy & Database Isolation
-We enforce security strictly **outside the model**. Prompting an LLM to "only write SELECT queries" is fundamentally unsafe. 
-- We use `sqlglot` to parse the LLM's output into an Abstract Syntax Tree (AST), verifying `isinstance(statement, exp.Select)` and recursively walking the AST to explicitly block nested `Delete`/`Drop`/`Update` nodes even within subqueries. 
-- We dynamically inject a `LIMIT 100` clause at the AST level to prevent unbounded queries.
-- We implemented a dual-pool system: the agent executes SQL using a strictly read-only `target_pool`, while LangGraph checkpoints and analytics are securely written via a separate `app_pool`. 
-
-### 5. Custom Evaluation Harness & Baseline Comparison
-We engineered a robust evaluation pipeline (`eval/run_eval.py` and `eval/run_baseline.py`) that executes against 29 complex multi-turn conversational trajectories (86 total turns).
-- **Multiset (Bag) Semantics**: Instead of fragile string comparison, our harness executes both the Gold SQL and the Generated SQL against the live database. It extracts the raw values, normalizes them, and computes a `Counter` (multiset) for deterministic value comparison independent of arbitrary LLM column aliasing.
-- **Dataset Generation**: We utilized **Gemini 3.1 Pro (Google)** strictly offline to synthetically author the complex, multi-turn evaluation dataset (`eval/dataset.json`) and generate the Gold SQL for edge cases to ensure robust benchmarking. No frontier models are used in the runtime path.
-- **Performance Benchmarks**: 
-  We evaluated the exact same underlying 7B model using pure Zero-Shot prompting (no state management, no routing, no retries) on the 75 SQL-required turns.
-  - **Zero-Shot Baseline Accuracy**: 40.00%
-  - **Final Engineered System Accuracy**: **74.16%** 
-  - By wrapping the 7B model in our LangGraph architecture, we achieved a **+34.16% absolute improvement** (a ~85% relative gain) purely through software engineering and prompt orchestration.
-- **Failure Analysis (Deep Dive)**:
-  We analyzed the failures in our final `eval_report` and diagnosed the root causes across three different agentic intents:
-  
-  **1. CLARIFY Intent Failure (LLM Overconfidence)**
-  - *Query*: "Show me the yield for chickpea."
-  - *Diagnosis*: The user request was ambiguous (Expected vs Actual yield). The Gold intent was `CLARIFY`. However, the Router LLM hallucinated an assumption (defaulting to `actual_yield`) and classified it as `NEW`, generating the SQL instead of asking the user for clarification.
-  - *Proposed Fix*: Implement explicit semantic boundary rules in the `router.txt` prompt (e.g., "If an aggregate noun like 'yield' lacks a specific qualifier, you MUST return CLARIFY") rather than brute-forcing edge cases with static examples.
-  
-  **2. NEW Intent Failure (Projection Over-fetching)**
-  - *Query*: "Classify all plots as small, medium, or large based on area."
-  - *Diagnosis*: The SQL Generator successfully wrote the complex `CASE WHEN` logic. However, instead of projecting only the ID and the classification (`SELECT id, area_hectares, CASE...`), it over-fetched by projecting all columns (`SELECT *, CASE...`). Our strict deterministic AST evaluator rejected this as a column mismatch.
-  - *Proposed Fix*: Upgrade the deterministic evaluator to an "LLM-as-a-Judge" pipeline to score semantic equivalence rather than strict relational algebra mapping, as over-fetching is often acceptable in natural chat UIs.
-  
-  **3. REFINE Intent Failure (Nested Aggregation Logic)**
-  - *Query*: "What is their average total plot area?"
-  - *Diagnosis*: The SQL Generator attempted to compute the average of the raw plot rows directly (`AVG(plot.area_hectares)`). Mathematically, it needed to first SUM the areas per farmer in a subquery, and then AVG that subquery result. The 7B model lacked the structural reasoning for this nested operation.
-  - *Proposed Fix*: Implement a dynamic Few-Shot RAG architecture to retrieve semantically similar nested-aggregation examples from a vector database at runtime, giving the LLM contextual structural templates without bloating the static prompt.
-
-- **Determinism**: The evaluation harness sets the LLM `temperature=0.0`. While local inference introduces minor hardware-level floating-point variances, the structural queries and execution results are highly deterministic. *(Note: Full execution traces for all failures are available in the generated markdown reports located in the `eval/reports/` directory).*
-
-### 6. Assumptions & Limitations
-- **Sensor Data Volume**: To handle large scale data,  The database schemas are built with optimal indexing (`plot_id`, `recorded_at`) and strict execution timeouts (`3000ms`) to handle the 2M-row scale in production, ensuring high performance even on massive datasets.
-
-### 6. Trade-off: Latency vs. Modular Architecture
-By strictly enforcing the Single Responsibility Principle, processing a `NEW_QUERY` requires at least two sequential LLM inferences (Router classification → SQL generation), and a third if self-correction triggers. While this guarantees clean state management, it inherently introduces high latency when running a 7B model locally.
-
-### 7. What I would do differently with more time
-- **Improve Latency & Caching**: Explore using a faster, smaller model (e.g., 1.5B or 3B) exclusively for the semantic Routing node, implement token streaming to drastically improve perceived UI latency, and introduce Semantic Caching (e.g., Redis + Vector Search) to instantly return SQL or data for frequently asked questions without hitting the LLM at all.
-- **Few-Shot RAG**: Implement a lightweight vector database (e.g., `pgvector`) to store historical "Gold SQL" examples. We could retrieve the top 3 semantically similar past queries and inject them into the prompt to boost SQL accuracy.
-- **Agentic Schema Exploration**: Rather than injecting the entire static schema into the prompt, provide the LLM with tools to dynamically query the database catalog (`information_schema`) to investigate enum values or unknown columns on the fly.
-- **Evaluation Improvements**: While our deterministic evaluator successfully handles superset column matching (safely ignoring over-fetched columns), it remains brittle to **computed column aliases** (e.g., failing when the LLM aliases a `CASE` statement as `size` instead of `size_category`) and **nested aggregation structures**. To drastically reduce false negatives, I would implement two solutions: (1) **Deterministic Expansion**: Upgrade the `sqlglot` AST-evaluator to support "Expression Equivalence" (verifying computed expressions mathematically even if their final string aliases differ). (2) **Semantic Evaluation**: A final "LLM-as-a-Judge" layer  to assess true semantic equivalence rather than relying purely on exact relational algebra mapping.
 
 ---
 
-## Unit Testing & Coverage
-We have written 29 unit tests covering the core deterministic logic (conversation state handling, SQL validation and guardrails, result-set subset matching, and retry boundaries). The test suite currently achieves **43% overall statement coverage** across the backend API, with full coverage on guardrails and schema validation.
+## Design Decisions & Trade-offs
 
-They can be executed natively via `pytest`:
-```bash
-.venv/bin/pytest tests/ --cov=talk2db --cov-report=term-missing
-```
+### 1. Compensating for a Small (7B) Model
+A 7B model prompted naively struggles with complex text-to-SQL logic and multi-turn context drift. 
+- **Semantic Router**: We decoupled the raw conversation history from the SQL Generator. We use the model strictly as an *Information Extraction Router* on the first pass to build a rigidly structured JSON dictionary of active filters. The SQL Generator then only looks at this clean, extracted dictionary to write the SQL. This drastically reduces cognitive load and hallucination.
+- **Structured Output Chain-of-Thought (CoT)**: By requiring the Pydantic schemas to define a `reasoning` string field *before* the actual output, we force the autoregressive LLM to "think out loud" before writing SQL. This mathematically increases generation accuracy.
+- **KV Caching Optimization**: Massive, static text blocks like the Database Schema and System Instructions are strictly placed at the **top** of the prompts. Highly dynamic variables like `{history}` and `{user_query}` are placed at the absolute **bottom**. This guarantees that the LLM computes the Key-Value cache exactly once.
+
+### 2. Framework Usage: LangGraph
+We utilized **LangGraph** to orchestrate this directed cyclic graph.
+- **What it does for us**: It natively handles the recursive `while` loop for our self-correction retries and automatically checkpoints our `AgentState` to PostgreSQL. This allows us to build a "Session Resumption" dropdown in the UI.
+
+### 3. Conversation State Representation (Carry Forward vs. Discard)
+- **What we carry forward**: The semantic state (Topic, Active JSON Filters, Group By clauses). This persists infinitely across the session.
+- **What we discard**: The raw text conversation history. We strictly truncate the chat history to the last 4 turns (8 messages).
+
+### 4. Guardrail Strategy & Database Isolation
+We enforce security strictly **outside the model**. Prompting an LLM to "only write SELECT queries" is fundamentally unsafe. 
+- We use `sqlglot` to parse the LLM's output into an Abstract Syntax Tree (AST), recursively walking the AST to explicitly block nested `Delete`/`Drop`/`Update` nodes even within subqueries. 
+- We dynamically inject a `LIMIT 100` clause at the AST level to prevent unbounded queries.
+
+### 5. Trade-off: Latency vs. Modular Architecture
+By strictly enforcing the Single Responsibility Principle, processing a new query requires at least two sequential LLM inferences (Router classification → SQL generation), and a third if self-correction triggers. While this guarantees clean state management, it inherently introduces high latency when running a 7B model locally.
