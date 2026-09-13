@@ -12,15 +12,12 @@ from langchain_core.messages import HumanMessage
 from talk2db.lifecycle import startup, shutdown
 from eval.run_eval import compare_results
 
-SCHEMA = """
-CREATE TABLE farmer (id UUID, name TEXT, district TEXT, state TEXT, registered_on DATE, is_active BOOLEAN);
-CREATE TABLE plot (id UUID, farmer_id UUID, area_hectares NUMERIC, soil_type TEXT, district TEXT, irrigation_type TEXT);
-CREATE TABLE crop_cycle (id UUID, plot_id UUID, crop TEXT, season TEXT, sown_date DATE, harvest_date DATE, expected_yield NUMERIC, actual_yield NUMERIC, status TEXT);
-CREATE TABLE advisory (id UUID, plot_id UUID, issued_at TIMESTAMP, category TEXT, severity TEXT, acknowledged_at TIMESTAMP);
-CREATE TABLE sensor_reading (id UUID, plot_id UUID, reading_type TEXT, value NUMERIC, recorded_at TIMESTAMP);
-CREATE TABLE field_agent (id UUID, name TEXT, district TEXT, joined_on DATE);
-CREATE TABLE field_visit (id UUID, plot_id UUID, agent_id UUID, visited_at TIMESTAMP, outcome TEXT, notes TEXT);
-"""
+def load_schema() -> str:
+    schema_path = os.path.join(os.path.dirname(__file__), "..", "talk2db", "prompts", "schema.txt")
+    with open(schema_path, "r") as f:
+        return f.read()
+
+SCHEMA = load_schema()
 
 def extract_sql(text: str) -> str:
     # Try to extract from markdown code blocks

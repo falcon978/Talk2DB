@@ -1,7 +1,7 @@
 # Conversational Text-to-SQL Agent Architecture
 
 ## 1. Executive Summary
-This repository contains a production-grade, stateful Conversational Text-to-SQL agent built specifically for an agricultural PostgreSQL database. It translates natural language into robust, secure PostgreSQL queries using a constrained agentic workflow, maintaining persistent multi-turn conversational memory, filtering semantics, and dynamic state tracking.
+This repository contains a production-grade, stateful Conversational Text-to-SQL agent built specifically for a target PostgreSQL database. It translates natural language into robust, secure PostgreSQL queries using a constrained agentic workflow, maintaining persistent multi-turn conversational memory, filtering semantics, and dynamic state tracking.
 
 ## 2. Technology Stack
 - **Core Orchestration**: LangGraph (StateGraph)
@@ -32,7 +32,7 @@ graph TD
     
     %% Persistence Layer (Dual-Pool)
     PG_Admin[(App DB Pool<br/>postgres)]:::db
-    PG_Agri[(Target DB Pool<br/>readonly_user)]:::db
+    PG_Target[(Target DB Pool<br/>readonly_user)]:::db
     
     %% Agent Layer
     subgraph LangGraph StateMachine
@@ -58,7 +58,7 @@ graph TD
     %% Connections
     API -->|Invoke Graph| Router
     API -->|Write Checkpoints & Logs| PG_Admin
-    Executor -->|Read-Only Execution| PG_Agri
+    Executor -->|Read-Only Execution| PG_Target
 ```
 
 ## 4. Decoupled API & Dual-Pool Isolation
@@ -67,7 +67,7 @@ To ensure production-grade security and performance, the architecture is strictl
 1. **FastAPI Backend**: The Streamlit UI is a thin, dumb presentation layer. All heavy lifting, LangGraph execution, and asynchronous task management is offloaded to a non-blocking FastAPI backend. 
 2. **Dual-Pool Database Security**:
    - **App Pool (`postgres` admin)**: The FastAPI backend connects to the database via an admin pool to write LangGraph state checkpoints, record `chat_history` analytics, and log full stack traces into `system_errors`.
-   - **Agri Pool (`readonly_user`)**: The LLM's dynamic queries are exclusively executed via a deeply restricted connection pool. The `readonly_user` role has a strictly enforced 3000ms statement timeout and is explicitly whitelisted to SELECT from only 7 agricultural tables. The LLM physically cannot read system tables or user telemetry.
+   - **Target Pool (`readonly_user`)**: The LLM's dynamic queries are exclusively executed via a deeply restricted connection pool. The `readonly_user` role has a strictly enforced 3000ms statement timeout and is explicitly whitelisted to SELECT from only 7 target tables. The LLM physically cannot read system tables or user telemetry.
 
 ## 5. Chat History & State Persistence
 The architecture guarantees persistent, resumable multi-turn conversations:

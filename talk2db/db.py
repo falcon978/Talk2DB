@@ -38,7 +38,7 @@ async def create_target_pool() -> asyncpg.Pool:
     Used strictly by the DBExecutor for LLM-generated SQL queries.
     """
     return await asyncpg.create_pool(
-        settings.db_dsn_agri, min_size=2, max_size=10
+        settings.db_dsn_target, min_size=2, max_size=10
     )
 
 

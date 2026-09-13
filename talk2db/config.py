@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     # Database & Cache Configuration
     redis_url: str
     db_dsn_app: str
-    db_dsn_agri: str
+    db_dsn_target: str
     
     # Core Agent Logic
     max_retries: int = 2

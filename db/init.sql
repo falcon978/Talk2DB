@@ -67,7 +67,7 @@ CREATE TABLE field_visit (
 );
 
 -- Grant privileges to readonly_user
-GRANT CONNECT ON DATABASE agridb TO readonly_user;
+GRANT CONNECT ON DATABASE targetdb TO readonly_user;
 GRANT USAGE ON SCHEMA public TO readonly_user;
 GRANT SELECT ON farmer, plot, crop_cycle, sensor_reading, advisory, field_agent, field_visit TO readonly_user;
 

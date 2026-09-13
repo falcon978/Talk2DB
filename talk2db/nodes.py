@@ -182,7 +182,7 @@ async def validator_node(state: AgentState) -> Dict[str, Any]:
 
 async def executor_node(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:
     """
-    Executes the validated SQL against the read-only Agricultural pool.
+    Executes the validated SQL against the read-only Target pool.
 
     Args:
         state: Current AgentState containing last_sql.

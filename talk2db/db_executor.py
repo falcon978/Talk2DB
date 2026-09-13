@@ -1,5 +1,5 @@
 """
-Secure SQL execution wrapper for the read-only agricultural database pool.
+Secure SQL execution wrapper for the read-only target database pool.
 
 Injected into the LangGraph executor node via RunnableConfig.
 Uses asyncpg for maximum performance on generated SELECT queries.
@@ -26,7 +26,7 @@ class DBExecutor:
         Initializes the executor with a dependency-injected asyncpg pool.
 
         Args:
-            pool: An asyncpg connection pool connected to the read-only agricultural database.
+            pool: An asyncpg connection pool connected to the read-only target database.
         """
         self.pool = pool
 

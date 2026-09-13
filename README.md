@@ -6,10 +6,7 @@ A domain-agnostic conversational Text-to-SQL agent built for non-technical users
 
 
 ## Using Your Own Database Schema
-Talk2DB is designed to be completely domain-agnostic. To point it at your own database:
-1. Update `DB_DSN_TARGET` in your `.env` file.
-2. Replace the contents of `talk2db/prompts/schema.txt` with your own database schema (DDL or a simple text representation).
-3. (Highly Recommended) Update the few-shot examples in `talk2db/prompts/few_shot_router.txt` and `talk2db/prompts/few_shot_sql_gen.txt` to match your new schema so the LLM has accurate structural context.
+Talk2DB is designed to be completely domain-agnostic. For a comprehensive guide on how to point it at your own database, define your schema, and set up permissions, please see the [SETUP.md](SETUP.md) guide.
 
 ## Setup & Run Instructions
 
@@ -99,7 +96,7 @@ Our system leverages a **State Machine (LangGraph)** to handle conversational ro
 ### Architecture Highlights
 We engineered several advanced features that elevate this to a production-grade architecture:
 - **Asynchronous FastAPI Backend**: Instead of blocking Streamlit, we decoupled the architecture into a high-performance async FastAPI backend (`api.py`) that manages non-blocking DB execution (`asyncpg`) and parallel state mutations.
-- **Dual-Pool Database Isolation**: The LangGraph state checkpoints, execution telemetry (`chat_history`), and crash traces (`system_errors`) are logged securely via an Admin pool, while the LLM's dynamically generated queries are tightly sandboxed within a restricted `readonly_user` pool (explicitly whitelisted to only 7 agricultural tables).
+- **Dual-Pool Database Isolation**: The LangGraph state checkpoints, execution telemetry (`chat_history`), and crash traces (`system_errors`) are logged securely via an Admin pool, while the LLM's dynamically generated queries are tightly sandboxed within a restricted `readonly_user` pool (explicitly whitelisted to only 7 target tables).
 - **Session Resumption Time-Travel**: By leveraging LangGraph's native PostgreSQL checkpointer, users can switch between historical conversational sessions instantly in the UI. The semantic state (JSON filters) is perfectly hydrated from the database, allowing them to seamlessly resume a conversation from days ago.
 - **Graceful UI Crash Handling**: Both backend and frontend exceptions are gracefully trapped. Instead of showing raw stack traces to the user, the UI displays polite fallback messages while asynchronously logging the exact stack trace to the persistent `system_errors` table for developer triage.
 

@@ -53,7 +53,7 @@ async def startup() -> AppContext:
         logger.info("Creating Target DB Pool (asyncpg)...")
         _ctx.target_pool = await create_target_pool()
 
-        # 3. Wrap the agri pool in the DBExecutor (SOLID dependency injection target)
+        # 3. Wrap the target pool in the DBExecutor (SOLID dependency injection target)
         _ctx.db_executor = DBExecutor(_ctx.target_pool)
 
         # 4. Compile the LangGraph agent with Postgres checkpointer (runs setup/migration once)

@@ -1,7 +1,7 @@
 [project]
 name = "talk2db"
 version = "0.1.0"
-description = "Conversational Text-to-SQL Agent for Agricultural Data"
+description = "Conversational Text-to-SQL Agent for any tabular data"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

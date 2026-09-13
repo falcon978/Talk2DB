@@ -169,7 +169,7 @@ else:
 # --- Main Chat Interface ---
 st.title(config.ui_page_title)
 st.markdown(
-    "Ask complex natural language questions about farmers, plots, crops, and sensor readings."
+    "Ask complex natural language questions about your database."
 )
 
 # Render History
@@ -188,7 +188,7 @@ for msg in st.session_state.messages:
             st.caption(f"⚡ *Executed in {msg['latency_ms'] / 1000:.2f}s | {msg['tokens']} tokens used*")
 
 # Input handling
-if prompt := st.chat_input("E.g., Show me all active farmers in Pune who grow Wheat..."):
+if prompt := st.chat_input("E.g., Show me the top 10 records sorted by date..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -223,7 +223,7 @@ if prompt := st.chat_input("E.g., Show me all active farmers in Pune who grow Wh
                     retries = final_state.get("retry_count", 0)
                     response_text = (
                         "I'm sorry, but I can only answer questions strictly "
-                        "related to the agricultural database schemas."
+                        "related to the target database schemas."
                     )
                     response_text += f"\n\n*(Retries: {retries})*"
                     st.markdown(response_text)
